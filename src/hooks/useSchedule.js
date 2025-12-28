@@ -9,12 +9,18 @@ export function useSchedule() {
         overrides: {} // { '2023-10-25': workoutId or null }
     });
 
-    const getWorkoutForDate = (date) => {
+    const getWorkoutsForDate = (date) => {
         const dateKey = format(date, 'yyyy-MM-dd');
+        const matches = [];
 
-        // Check overrides first
+        // Check overrides first (overrides might conceptually replace everything, or just add... let's say it adds for now unless null)
         if (schedule.overrides.hasOwnProperty(dateKey)) {
-            return { workoutId: schedule.overrides[dateKey], color: 'blue' };
+            if (schedule.overrides[dateKey]) {
+                matches.push({ workoutId: schedule.overrides[dateKey], color: 'blue' });
+            }
+            // If override is explicit null, maybe we should return empty? 
+            // For simplicity, let's just treat override as an addition or replacement if needed. 
+            // User asked for "all habits", so let's accumulate matches.
         }
 
         // Check recurrences
@@ -22,22 +28,22 @@ export function useSchedule() {
             if (rule.type === 'weekly') {
                 const dayOfWeek = getDay(date);
                 if (rule.days.includes(dayOfWeek)) {
-                    return { workoutId: rule.workoutId, color: rule.color || 'blue' };
+                    matches.push({ workoutId: rule.workoutId, color: rule.color || 'blue' });
                 }
             } else if (rule.type === 'interval') {
                 if (!rule.startDate) continue;
-                // Use startOfDay to ignore time components for correct day diff
                 const start = startOfDay(parseISO(rule.startDate));
                 const target = startOfDay(date);
                 const diff = differenceInDays(target, start);
 
                 if (diff >= 0 && diff % rule.interval === 0) {
-                    return { workoutId: rule.workoutId, color: rule.color || 'blue' };
+                    matches.push({ workoutId: rule.workoutId, color: rule.color || 'blue' });
                 }
             }
         }
 
-        return null;
+        // Deduplicate by workoutId + color if needed, or just return all
+        return matches;
     };
 
     const addRecurrence = (rule) => {
@@ -54,5 +60,5 @@ export function useSchedule() {
         }));
     };
 
-    return { schedule, getWorkoutForDate, addRecurrence, removeRecurrence };
+    return { schedule, getWorkoutsForDate, addRecurrence, removeRecurrence };
 }

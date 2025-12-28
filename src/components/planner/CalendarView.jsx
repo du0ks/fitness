@@ -6,17 +6,26 @@ import { ChevronLeft, ChevronRight, Plus, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 
+// Map colors to CSS gradient stops or plain text classes
+const COLOR_MAP = {
+    blue: '#3b82f6',
+    green: '#22c55e',
+    red: '#ef4444',
+    purple: '#a855f7',
+    orange: '#f97316',
+};
+
 const COLORS = [
-    { name: 'blue', class: 'text-blue-500', bg: 'bg-blue-500' },
-    { name: 'green', class: 'text-green-500', bg: 'bg-green-500' },
-    { name: 'red', class: 'text-red-500', bg: 'bg-red-500' },
-    { name: 'purple', class: 'text-purple-500', bg: 'bg-purple-500' },
-    { name: 'orange', class: 'text-orange-500', bg: 'bg-orange-500' },
+    { name: 'blue', bg: 'bg-blue-500' },
+    { name: 'green', bg: 'bg-green-500' },
+    { name: 'red', bg: 'bg-red-500' },
+    { name: 'purple', bg: 'bg-purple-500' },
+    { name: 'orange', bg: 'bg-orange-500' },
 ];
 
 export default function CalendarView() {
     const [currentDate, setCurrentDate] = useState(new Date());
-    const { getWorkoutForDate, addRecurrence, removeRecurrence, schedule } = useSchedule();
+    const { getWorkoutsForDate, addRecurrence, removeRecurrence, schedule } = useSchedule();
     const { workouts } = useWorkouts();
     const [isManageMode, setIsManageMode] = useState(false);
 
@@ -58,12 +67,27 @@ export default function CalendarView() {
 
                 <div className="grid grid-cols-7 gap-y-2">
                     {days.map(day => {
-                        const dayData = getWorkoutForDate(day); // Returns { workoutId, color }
+                        const habits = getWorkoutsForDate(day); // Returns array [{ workoutId, color }, ...]
                         const isCurrentMonth = isSameMonth(day, currentDate);
 
-                        const colorClass = dayData
-                            ? COLORS.find(c => c.name === dayData.color)?.class
-                            : "text-white";
+                        let style = {};
+                        if (habits.length > 0) {
+                            if (habits.length === 1) {
+                                style = { color: COLOR_MAP[habits[0].color] || 'white' };
+                            } else {
+                                // Create gradient
+                                const stops = habits.map(h => COLOR_MAP[h.color] || 'white').join(', ');
+                                style = {
+                                    backgroundImage: `linear-gradient(to right, ${stops})`,
+                                    WebkitBackgroundClip: 'text',
+                                    WebkitTextFillColor: 'transparent',
+                                    backgroundClip: 'text',
+                                    color: 'transparent' // Fallback
+                                };
+                            }
+                        } else {
+                            style = { color: 'white' };
+                        }
 
                         return (
                             <div
@@ -74,7 +98,7 @@ export default function CalendarView() {
                                     isToday(day) && "bg-zinc-800",
                                 )}
                             >
-                                <span className={clsx("text-sm font-bold", colorClass)}>{format(day, 'd')}</span>
+                                <span className="text-sm font-bold" style={style}>{format(day, 'd')}</span>
                             </div>
                         );
                     })}

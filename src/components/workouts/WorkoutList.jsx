@@ -1,19 +1,38 @@
 import { useState } from 'react';
 import { useWorkouts } from '../../hooks/useWorkouts';
-import { Plus, Trash2, ChevronRight, Clock, Dumbbell, Save } from 'lucide-react';
+import { Plus, Trash2, ChevronRight, Clock, Dumbbell, Save, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function WorkoutList() {
-    const { workouts, addWorkout, deleteWorkout } = useWorkouts();
+    const { workouts, addWorkout, updateWorkout, deleteWorkout } = useWorkouts();
     const [isEditorOpen, setIsEditorOpen] = useState(false);
+    const [editingWorkout, setEditingWorkout] = useState(null);
+
+    const handleEdit = (workout) => {
+        setEditingWorkout(workout);
+        setIsEditorOpen(true);
+    };
+
+    const handleCreate = () => {
+        setEditingWorkout(null);
+        setIsEditorOpen(true);
+    };
+
+    const handleSave = (workoutData) => {
+        if (editingWorkout) {
+            updateWorkout(editingWorkout.id, workoutData);
+        } else {
+            addWorkout(workoutData);
+        }
+    };
 
     return (
         <div className="p-4 space-y-6 pb-24">
             <header className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Workouts</h1>
                 <button
-                    onClick={() => setIsEditorOpen(true)}
+                    onClick={handleCreate}
                     className="p-3 bg-blue-600 rounded-full text-white shadow-lg active:scale-95 transition-transform"
                 >
                     <Plus size={24} />
@@ -26,29 +45,41 @@ export default function WorkoutList() {
                 )}
                 {workouts.map(workout => (
                     <div key={workout.id} className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 flex justify-between items-center group">
-                        <div>
+                        <div onClick={() => handleEdit(workout)} className="flex-1 cursor-pointer">
                             <h3 className="font-bold text-lg">{workout.name}</h3>
                             <p className="text-zinc-400 text-sm">{workout.exercises.length} exercises</p>
                         </div>
-                        <button onClick={() => deleteWorkout(workout.id)} className="p-2 text-zinc-600 hover:text-red-500">
-                            <Trash2 size={20} />
-                        </button>
+                        <div className="flex gap-2">
+                            <button onClick={() => handleEdit(workout)} className="p-2 text-zinc-600 hover:text-blue-500">
+                                <Edit2 size={20} />
+                            </button>
+                            <button onClick={() => deleteWorkout(workout.id)} className="p-2 text-zinc-600 hover:text-red-500">
+                                <Trash2 size={20} />
+                            </button>
+                        </div>
                     </div>
                 ))}
             </div>
 
             <AnimatePresence>
                 {isEditorOpen && (
-                    <WorkoutEditor onClose={() => setIsEditorOpen(false)} onSave={addWorkout} />
+                    <WorkoutEditor
+                        onClose={() => setIsEditorOpen(false)}
+                        onSave={handleSave}
+                        initialData={editingWorkout}
+                    />
                 )}
             </AnimatePresence>
         </div>
     );
 }
 
-function WorkoutEditor({ onClose, onSave }) {
-    const [name, setName] = useState('');
-    const [exercises, setExercises] = useState([]);
+function WorkoutEditor({ onClose, onSave, initialData }) {
+    const [name, setName] = useState(initialData?.name || '');
+    // Ensure we deep copy exercises so we don't mutate state directly if initialData is provided
+    const [exercises, setExercises] = useState(
+        initialData?.exercises ? JSON.parse(JSON.stringify(initialData.exercises)) : []
+    );
 
     const addExercise = () => {
         setExercises([...exercises, {
@@ -62,7 +93,6 @@ function WorkoutEditor({ onClose, onSave }) {
 
     const updateExercise = (index, field, value) => {
         const newEx = [...exercises];
-        // If value is empty string, don't coerce to 0 yet, let it be ''
         newEx[index] = { ...newEx[index], [field]: value };
         setExercises(newEx);
     };
@@ -75,7 +105,6 @@ function WorkoutEditor({ onClose, onSave }) {
 
     const handleSave = () => {
         if (!name) return;
-        // Clean up data before saving (ensure numbers are numbers)
         const cleanExercises = exercises.map(ex => ({
             ...ex,
             sets: Number(ex.sets) || 0,
@@ -94,7 +123,7 @@ function WorkoutEditor({ onClose, onSave }) {
         >
             <div className="p-4 border-b border-zinc-800 flex justify-between items-center sticky top-0 bg-black/80 backdrop-blur-md z-10">
                 <button onClick={onClose} className="text-zinc-400">Cancel</button>
-                <h2 className="font-bold text-lg">New Workout</h2>
+                <h2 className="font-bold text-lg">{initialData ? 'Edit Workout' : 'New Workout'}</h2>
                 <button onClick={handleSave} className="text-blue-500 font-bold">Save</button>
             </div>
 
