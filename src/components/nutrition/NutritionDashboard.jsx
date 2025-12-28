@@ -1,26 +1,63 @@
 import { useState } from 'react';
 import { useNutrition } from '../../hooks/useNutrition';
-import { Plus, Flame, Beef, Settings2 } from 'lucide-react';
+import { Plus, Flame, Beef, Settings2, History, ChevronDown, ChevronUp } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
+import { format, parseISO } from 'date-fns';
 
 export default function NutritionDashboard() {
-    const { todayLog, targets, addEntries, updateTargets } = useNutrition();
+    const { todayLog, targets, addEntries, updateTargets, logs } = useNutrition();
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
     // Calculate percentages
     const calPercent = Math.min(100, (todayLog.calories / targets.targetCalories) * 100);
     const proPercent = Math.min(100, (todayLog.protein / targets.targetProtein) * 100);
 
+    // Sort logs by date descending
+    const sortedHistory = Object.entries(logs)
+        .sort((a, b) => new Date(b[0]) - new Date(a[0]))
+        .slice(0, 7); // Last 7 entries
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold">Nutrition</h2>
-                <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-zinc-400 hover:text-white">
-                    <Settings2 size={20} />
-                </button>
+                <div className="flex gap-2">
+                    <button onClick={() => setIsHistoryOpen(!isHistoryOpen)} className={clsx("p-2 rounded-full transition-colors", isHistoryOpen ? "bg-zinc-800 text-white" : "text-zinc-400")}>
+                        <History size={20} />
+                    </button>
+                    <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-zinc-400 hover:text-white">
+                        <Settings2 size={20} />
+                    </button>
+                </div>
             </div>
+
+            <AnimatePresence>
+                {isHistoryOpen && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden bg-zinc-900 rounded-2xl border border-zinc-800"
+                    >
+                        <div className="p-4 space-y-3">
+                            <h3 className="text-zinc-500 text-xs font-bold uppercase tracking-wider">Last 7 Days</h3>
+                            {sortedHistory.length === 0 && <p className="text-zinc-500 text-sm">No history available.</p>}
+                            {sortedHistory.map(([date, data]) => (
+                                <div key={date} className="flex justify-between items-center text-sm">
+                                    <span className="text-zinc-300">{format(parseISO(date), 'EEE, MMM d')}</span>
+                                    <div className="flex gap-4">
+                                        <span className="text-orange-400">{data.calories} kcal</span>
+                                        <span className="text-blue-400 w-12 text-right">{data.protein}g</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Progress Cards */}
             <div className="grid grid-cols-2 gap-4">
@@ -31,7 +68,6 @@ export default function NutritionDashboard() {
                     <span className="text-3xl font-bold tabular-nums">{todayLog.calories}</span>
                     <span className="text-xs text-zinc-500"> / {targets.targetCalories} kcal</span>
 
-                    {/* Simple Progress Bar */}
                     <div className="w-full h-1 bg-zinc-800 mt-4 rounded-full overflow-hidden">
                         <motion.div
                             initial={{ width: 0 }}

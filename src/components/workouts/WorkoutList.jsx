@@ -62,6 +62,7 @@ function WorkoutEditor({ onClose, onSave }) {
 
     const updateExercise = (index, field, value) => {
         const newEx = [...exercises];
+        // If value is empty string, don't coerce to 0 yet, let it be ''
         newEx[index] = { ...newEx[index], [field]: value };
         setExercises(newEx);
     };
@@ -74,7 +75,15 @@ function WorkoutEditor({ onClose, onSave }) {
 
     const handleSave = () => {
         if (!name) return;
-        onSave({ name, exercises });
+        // Clean up data before saving (ensure numbers are numbers)
+        const cleanExercises = exercises.map(ex => ({
+            ...ex,
+            sets: Number(ex.sets) || 0,
+            restSet: Number(ex.restSet) || 0,
+            restExercise: Number(ex.restExercise) || 0
+        }));
+
+        onSave({ name, exercises: cleanExercises });
         onClose();
     };
 
@@ -121,8 +130,9 @@ function WorkoutEditor({ onClose, onSave }) {
                                     <label className="text-xs text-zinc-500 mb-1 block">Sets</label>
                                     <div className="flex items-center bg-zinc-800 rounded-lg overflow-hidden">
                                         <input
-                                            type="number" value={ex.sets}
-                                            onChange={e => updateExercise(i, 'sets', Number(e.target.value))}
+                                            type="number"
+                                            value={ex.sets}
+                                            onChange={e => updateExercise(i, 'sets', e.target.value)}
                                             className="w-full bg-transparent p-2 text-center outline-none"
                                         />
                                     </div>
@@ -132,8 +142,9 @@ function WorkoutEditor({ onClose, onSave }) {
                                     <div className="flex items-center bg-zinc-800 rounded-lg overflow-hidden">
                                         <Clock size={14} className="ml-2 text-zinc-500" />
                                         <input
-                                            type="number" value={ex.restSet}
-                                            onChange={e => updateExercise(i, 'restSet', Number(e.target.value))}
+                                            type="number"
+                                            value={ex.restSet}
+                                            onChange={e => updateExercise(i, 'restSet', e.target.value)}
                                             className="w-full bg-transparent p-2 text-center outline-none"
                                         />
                                     </div>
@@ -143,8 +154,9 @@ function WorkoutEditor({ onClose, onSave }) {
                                     <div className="flex items-center bg-zinc-800 rounded-lg overflow-hidden">
                                         <Clock size={14} className="ml-2 text-zinc-500" />
                                         <input
-                                            type="number" value={ex.restExercise}
-                                            onChange={e => updateExercise(i, 'restExercise', Number(e.target.value))}
+                                            type="number"
+                                            value={ex.restExercise}
+                                            onChange={e => updateExercise(i, 'restExercise', e.target.value)}
                                             className="w-full bg-transparent p-2 text-center outline-none"
                                         />
                                     </div>

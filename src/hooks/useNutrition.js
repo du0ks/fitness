@@ -39,6 +39,7 @@ export function useNutrition() {
     return {
         todayLog,
         targets: config,
+        logs, // Exposed full logs
         addEntries,
         updateTargets
     };
