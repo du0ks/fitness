@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useWorkouts } from '../../hooks/useWorkouts';
+import { useWorkoutHistory } from '../../hooks/useWorkoutHistory';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, CheckCircle, SkipForward, Play, Pause, X, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, CheckCircle, SkipForward, Play, Pause, X, AlertTriangle, Timer } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
-// import useSound from 'use-sound'; // Note: might need to install or just skip for now
 
 export default function SessionRunner() {
     const navigate = useNavigate();
     const { workouts } = useWorkouts();
+    const { addLog } = useWorkoutHistory();
 
     // Selection State
     const [selectedWorkoutId, setSelectedWorkoutId] = useState(null);
@@ -19,13 +20,17 @@ export default function SessionRunner() {
     const [currentSet, setCurrentSet] = useState(1);
 
     // Timer State
-    const [timerDisplay, setTimerDisplay] = useState(0);
-    const [totalTimer, setTotalTimer] = useState(0);
+    const [timerDisplay, setTimerDisplay] = useState(0); // For countdowns (rest)
+    const [totalTimer, setTotalTimer] = useState(0);     // Total workout duration
+    const [currentSetTimer, setCurrentSetTimer] = useState(0); // Active set duration
+    const [totalSetTime, setTotalSetTime] = useState(0); // Accumulated time in sets
+
     const [restType, setRestType] = useState('set'); // 'set' or 'exercise'
 
     // Refs for timestamps
     const restEndTimeRef = useRef(null);
     const workoutStartTimeRef = useRef(null);
+    const setStartTimeRef = useRef(null);
 
     // Exit Confirmation
     const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -36,32 +41,26 @@ export default function SessionRunner() {
     // --- Navigation Blocking ---
     useEffect(() => {
         if (sessionState === 'active' || sessionState === 'rest') {
-            // Push a dummy state so back button doesn't leave page immediately
-            // Use href because we are using HashRouter, and pathname would be just "/"
             window.history.pushState(null, null, window.location.href);
-
             const handlePopState = (e) => {
-                // Prevent default back behavior by pushing state again
                 window.history.pushState(null, null, window.location.href);
                 setShowExitConfirm(true);
             };
-
             window.addEventListener('popstate', handlePopState);
             return () => window.removeEventListener('popstate', handlePopState);
         }
     }, [sessionState]);
 
+    // --- Timers ---
 
-    // --- Timer Logic (Timestamp based) ---
+    // Rest Countdown
     useEffect(() => {
         let interval = null;
-
         if (sessionState === 'rest') {
             interval = setInterval(() => {
                 if (restEndTimeRef.current) {
                     const now = Date.now();
                     const remaining = Math.ceil((restEndTimeRef.current - now) / 1000);
-
                     if (remaining <= 0) {
                         setTimerDisplay(0);
                         finishRest();
@@ -69,11 +68,10 @@ export default function SessionRunner() {
                         setTimerDisplay(remaining);
                     }
                 }
-            }, 200); // Check more frequently than 1s to be responsive
+            }, 200);
         } else {
             setTimerDisplay(0);
         }
-
         return () => clearInterval(interval);
     }, [sessionState]);
 
@@ -82,11 +80,25 @@ export default function SessionRunner() {
         let interval = null;
         if (sessionState === 'active' || sessionState === 'rest') {
             if (!workoutStartTimeRef.current) workoutStartTimeRef.current = Date.now();
-
             interval = setInterval(() => {
                 const now = Date.now();
                 setTotalTimer(Math.floor((now - workoutStartTimeRef.current) / 1000));
             }, 1000);
+        }
+        return () => clearInterval(interval);
+    }, [sessionState]);
+
+    // Set Timer (Active)
+    useEffect(() => {
+        let interval = null;
+        if (sessionState === 'active') {
+            if (!setStartTimeRef.current) setStartTimeRef.current = Date.now();
+            interval = setInterval(() => {
+                const now = Date.now();
+                setCurrentSetTimer(Math.floor((now - setStartTimeRef.current) / 1000));
+            }, 1000);
+        } else {
+            setCurrentSetTimer(0);
         }
         return () => clearInterval(interval);
     }, [sessionState]);
@@ -99,32 +111,40 @@ export default function SessionRunner() {
         setCurrentSet(1);
 
         setTotalTimer(0);
+        setTotalSetTime(0);
         workoutStartTimeRef.current = Date.now();
+        setStartTimeRef.current = Date.now();
     };
 
     const finishSet = () => {
         if (!currentExercise) return;
 
+        // Accumulate set time
+        if (setStartTimeRef.current) {
+            const duration = Date.now() - setStartTimeRef.current;
+            setTotalSetTime(prev => prev + duration);
+            setStartTimeRef.current = null; // Clear so it resets for next set
+        }
+
         const isLastSet = currentSet >= currentExercise.sets;
         const isLastExercise = currentExerciseIndex >= workout.exercises.length - 1;
 
         if (isLastSet && isLastExercise) {
-            setSessionState('finished');
+            finishWorkout();
             return;
         }
 
         setRestType(isLastSet ? 'exercise' : 'set');
-        const duration = isLastSet ? currentExercise.restExercise : currentExercise.restSet;
+        const restDuration = isLastSet ? currentExercise.restExercise : currentExercise.restSet;
 
-        // Set timestamp for end of rest
-        restEndTimeRef.current = Date.now() + (duration * 1000);
-        setTimerDisplay(duration);
+        restEndTimeRef.current = Date.now() + (restDuration * 1000);
+        setTimerDisplay(restDuration);
 
         setSessionState('rest');
     };
 
     const finishRest = () => {
-        if (sessionState !== 'rest') return; // Guard against double calls
+        if (sessionState !== 'rest') return;
 
         if (restType === 'set') {
             setCurrentSet(s => s + 1);
@@ -132,20 +152,33 @@ export default function SessionRunner() {
             setCurrentExerciseIndex(i => i + 1);
             setCurrentSet(1);
         }
+
+        setStartTimeRef.current = Date.now(); // Start tracking next set time
         setSessionState('active');
     };
 
-    const handleManualExit = () => {
-        setShowExitConfirm(true);
+    const finishWorkout = () => {
+        setSessionState('finished');
+
+        // Calculate final stats
+        // Note: totalTimer is in seconds, totalSetTime is in ms
+        const exerciseSec = Math.floor(totalSetTime / 1000);
+        const totalSec = totalTimer;
+        const restSec = Math.max(0, totalSec - exerciseSec);
+
+        addLog({
+            workoutId: workout.id,
+            name: workout.name,
+            totalTime: totalSec,
+            exerciseTime: exerciseSec,
+            restTime: restSec
+        });
     };
 
-    const confirmExit = () => {
-        navigate('/');
-    };
-
-    const cancelExit = () => {
-        setShowExitConfirm(false);
-    };
+    // ... exit handlers ...
+    const handleManualExit = () => setShowExitConfirm(true);
+    const confirmExit = () => navigate('/');
+    const cancelExit = () => setShowExitConfirm(false);
 
     const formatTime = (sec) => {
         const m = Math.floor(sec / 60);
@@ -178,6 +211,10 @@ export default function SessionRunner() {
     }
 
     if (sessionState === 'finished') {
+        // We can use local computation here for display
+        const exerciseSec = Math.floor(totalSetTime / 1000);
+        const restSec = Math.max(0, totalTimer - exerciseSec);
+
         return (
             <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-8 text-center space-y-6">
                 <motion.div
@@ -187,22 +224,32 @@ export default function SessionRunner() {
                     <CheckCircle size={48} className="text-black" />
                 </motion.div>
                 <h1 className="text-4xl font-bold">Workout Complete!</h1>
-                <p className="text-zinc-400 text-lg">Great job! You finished {workout.name} in {formatTime(totalTimer)}.</p>
+
+                <div className="grid grid-cols-2 gap-4 w-full max-w-xs mt-8">
+                    <div className="bg-zinc-900 p-4 rounded-2xl">
+                        <p className="text-zinc-500 text-xs">Total Time</p>
+                        <p className="text-xl font-bold text-white">{formatTime(totalTimer)}</p>
+                    </div>
+                    <div className="bg-zinc-900 p-4 rounded-2xl">
+                        <p className="text-zinc-500 text-xs">Exercise</p>
+                        <p className="text-xl font-bold text-green-500">{formatTime(exerciseSec)}</p>
+                    </div>
+                    <div className="bg-zinc-900 p-4 rounded-2xl col-span-2">
+                        <p className="text-zinc-500 text-xs">Rest</p>
+                        <p className="text-xl font-bold text-blue-500">{formatTime(restSec)}</p>
+                    </div>
+                </div>
+
                 <button onClick={() => navigate('/')} className="w-full bg-zinc-800 py-4 rounded-xl font-bold mt-8">Back Home</button>
             </div>
         )
     }
 
-    // Active or Rest
+    // Active or Rest active view
     return (
         <div className="min-h-screen bg-zinc-950 flex flex-col relative overflow-hidden">
-            {/* Background Indicator */}
-            <div className={clsx(
-                "absolute inset-0 transition-colors duration-500",
-                sessionState === 'rest' ? "bg-blue-900/20" : "bg-transparent"
-            )} />
+            <div className={clsx("absolute inset-0 transition-colors duration-500", sessionState === 'rest' ? "bg-blue-900/20" : "bg-transparent")} />
 
-            {/* Header */}
             <div className="p-4 z-10 flex justify-between items-center bg-zinc-950/50 backdrop-blur-md safe-top">
                 <button onClick={handleManualExit}><X size={24} className="text-zinc-500" /></button>
                 <div className="text-sm font-mono text-zinc-400">{formatTime(totalTimer)}</div>
@@ -237,6 +284,12 @@ export default function SessionRunner() {
                             <h1 className="text-4xl font-black">{currentExercise.name}</h1>
                         </div>
 
+                        {/* Set Timer Display */}
+                        <div className="flex items-center justify-center gap-2 text-zinc-500 font-mono">
+                            <Timer size={16} />
+                            <span>{formatTime(currentSetTimer)}</span>
+                        </div>
+
                         <div className="flex justify-center gap-2">
                             {Array.from({ length: currentExercise.sets }).map((_, i) => (
                                 <div key={i} className={clsx(
@@ -246,7 +299,7 @@ export default function SessionRunner() {
                             ))}
                         </div>
 
-                        <div className="py-10">
+                        <div className="py-6">
                             <div className="text-6xl font-black mb-2">{currentSet} <span className="text-2xl text-zinc-500 font-medium">/ {currentExercise.sets}</span></div>
                             <p className="text-zinc-400">Current Set</p>
                         </div>

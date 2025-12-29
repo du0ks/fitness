@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isSameMonth, isToday, startOfWeek, endOfWeek } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isSameMonth, isToday, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { useSchedule } from '../../hooks/useSchedule';
 import { useWorkouts } from '../../hooks/useWorkouts';
-import { ChevronLeft, ChevronRight, Plus, Check } from 'lucide-react';
+import { useWorkoutHistory } from '../../hooks/useWorkoutHistory';
+import { ChevronLeft, ChevronRight, Plus, Check, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 
@@ -27,11 +28,11 @@ export default function CalendarView() {
     const [currentDate, setCurrentDate] = useState(new Date());
     const { getWorkoutsForDate, addRecurrence, removeRecurrence, schedule } = useSchedule();
     const { workouts } = useWorkouts();
+    const { history } = useWorkoutHistory();
     const [isManageMode, setIsManageMode] = useState(false);
 
     const monthStart = startOfMonth(currentDate);
     const monthEnd = endOfMonth(currentDate);
-    // weekStartsOn 1 means Monday
     const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
     const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
 
@@ -39,6 +40,11 @@ export default function CalendarView() {
 
     const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
     const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
+
+    const formatDuration = (sec) => {
+        const m = Math.floor(sec / 60);
+        return `${m}m`;
+    };
 
     return (
         <div className="p-4 safe-top pb-24 space-y-6">
@@ -137,6 +143,25 @@ export default function CalendarView() {
                 })}
             </div>
 
+            {/* Completed Workouts History */}
+            <div className="space-y-4 pt-4 border-t border-zinc-800">
+                <h3 className="font-bold text-lg text-zinc-400">Past Workouts</h3>
+                {history.length === 0 && <p className="text-zinc-500 text-sm">No completed workouts yet.</p>}
+                {history.slice(0, 10).map(log => (
+                    <div key={log.id} className="flex justify-between items-center py-2 border-b border-zinc-800 last:border-0">
+                        <div>
+                            <p className="font-bold text-white">{log.name}</p>
+                            <p className="text-xs text-zinc-500">{format(parseISO(log.date), 'MMM d, yyyy • h:mm a')}</p>
+                        </div>
+                        <div className="flex items-center gap-2 text-zinc-400">
+                            <Clock size={14} />
+                            <span className="text-sm font-mono">{formatDuration(log.totalTime)}</span>
+                        </div>
+                    </div>
+                ))}
+                {history.length > 10 && <p className="text-center text-xs text-zinc-600 mt-2">Showing last 10 workouts</p>}
+            </div>
+
             <ManageHabitModal
                 isOpen={isManageMode}
                 onClose={() => setIsManageMode(false)}
@@ -151,8 +176,7 @@ function ManageHabitModal({ isOpen, onClose, workouts, onAdd }) {
     const [type, setType] = useState('weekly');
     const [selectedWorkout, setSelectedWorkout] = useState('');
     const [selectedDays, setSelectedDays] = useState([]);
-    const [interval, setInterval] = useState(2); // Keep as initial number
-    // Local state for input field that can be string (to allow empty)
+    const [interval, setInterval] = useState(2);
     const [intervalInput, setIntervalInput] = useState('2');
     const [color, setColor] = useState('blue');
 
@@ -163,7 +187,6 @@ function ManageHabitModal({ isOpen, onClose, workouts, onAdd }) {
 
     const handleIntervalChange = (val) => {
         setIntervalInput(val);
-        // If it parses to a number, update real state. If empty, it's 0 (or just ignore but we need valid number on save)
         const num = parseInt(val);
         if (!isNaN(num)) {
             setInterval(num);
