@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNutrition } from '../../hooks/useNutrition';
-import { Plus, Flame, Beef, Settings2, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Flame, Beef, Settings2, History, ChevronDown, ChevronUp, X } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO } from 'date-fns';
@@ -15,17 +15,12 @@ export default function NutritionDashboard() {
     const calPercent = Math.min(100, (todayLog.calories / targets.targetCalories) * 100);
     const proPercent = Math.min(100, (todayLog.protein / targets.targetProtein) * 100);
 
-    // Sort logs by date descending
-    const sortedHistory = Object.entries(logs)
-        .sort((a, b) => new Date(b[0]) - new Date(a[0]))
-        .slice(0, 7); // Last 7 entries
-
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold">Nutrition</h2>
                 <div className="flex gap-2">
-                    <button onClick={() => setIsHistoryOpen(!isHistoryOpen)} className={clsx("p-2 rounded-full transition-colors", isHistoryOpen ? "bg-zinc-800 text-white" : "text-zinc-400")}>
+                    <button onClick={() => setIsHistoryOpen(true)} className="p-2 text-zinc-400 hover:text-white transition-colors">
                         <History size={20} />
                     </button>
                     <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-zinc-400 hover:text-white">
@@ -36,26 +31,7 @@ export default function NutritionDashboard() {
 
             <AnimatePresence>
                 {isHistoryOpen && (
-                    <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden bg-zinc-900 rounded-2xl border border-zinc-800"
-                    >
-                        <div className="p-4 space-y-3">
-                            <h3 className="text-zinc-500 text-xs font-bold uppercase tracking-wider">Last 7 Days</h3>
-                            {sortedHistory.length === 0 && <p className="text-zinc-500 text-sm">No history available.</p>}
-                            {sortedHistory.map(([date, data]) => (
-                                <div key={date} className="flex justify-between items-center text-sm">
-                                    <span className="text-zinc-300">{format(parseISO(date), 'EEE, MMM d')}</span>
-                                    <div className="flex gap-4">
-                                        <span className="text-orange-400">{data.calories} kcal</span>
-                                        <span className="text-blue-400 w-12 text-right">{data.protein}g</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </motion.div>
+                    <HistoryModal logs={logs} onClose={() => setIsHistoryOpen(false)} />
                 )}
             </AnimatePresence>
 
@@ -115,6 +91,45 @@ export default function NutritionDashboard() {
                 onSave={updateTargets}
             />
         </div>
+    );
+}
+
+function HistoryModal({ logs, onClose }) {
+    // Sort logs by date descending
+    const sortedHistory = Object.entries(logs)
+        .sort((a, b) => new Date(b[0]) - new Date(a[0]));
+
+    return (
+        <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-zinc-950 flex flex-col"
+        >
+            <div className="p-4 flex justify-between items-center border-b border-zinc-800 safe-top">
+                <h2 className="text-xl font-bold">Nutrition History</h2>
+                <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white">
+                    <X size={24} />
+                </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {sortedHistory.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-full text-zinc-500">
+                        <History size={48} className="mb-4 opacity-20" />
+                        <p>No history yet</p>
+                    </div>
+                )}
+
+                {sortedHistory.map(([date, data]) => (
+                    <div key={date} className="bg-zinc-900/50 p-4 rounded-xl flex justify-between items-center border border-zinc-900">
+                        <span className="font-medium text-zinc-200">{format(parseISO(date), 'EEEE, MMM d, yyyy')}</span>
+                        <div className="flex gap-4 text-sm font-bold">
+                            <span className="text-orange-500">{data.calories} kcal</span>
+                            <span className="text-blue-500 w-12 text-right">{data.protein}g</span>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </motion.div>
     );
 }
 

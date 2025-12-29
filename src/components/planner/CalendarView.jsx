@@ -31,8 +31,9 @@ export default function CalendarView() {
 
     const monthStart = startOfMonth(currentDate);
     const monthEnd = endOfMonth(currentDate);
-    const calendarStart = startOfWeek(monthStart);
-    const calendarEnd = endOfWeek(monthEnd);
+    // weekStartsOn 1 means Monday
+    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
 
     const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
@@ -60,14 +61,14 @@ export default function CalendarView() {
                 </div>
 
                 <div className="grid grid-cols-7 text-center mb-2">
-                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => (
+                    {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => (
                         <div key={d} className="text-zinc-500 text-xs font-bold">{d}</div>
                     ))}
                 </div>
 
                 <div className="grid grid-cols-7 gap-y-2">
                     {days.map(day => {
-                        const habits = getWorkoutsForDate(day); // Returns array [{ workoutId, color }, ...]
+                        const habits = getWorkoutsForDate(day);
                         const isCurrentMonth = isSameMonth(day, currentDate);
 
                         let style = {};
@@ -228,18 +229,26 @@ function ManageHabitModal({ isOpen, onClose, workouts, onAdd }) {
 
                                 {type === 'weekly' ? (
                                     <div className="flex justify-between">
-                                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                                            <button
-                                                key={i}
-                                                onClick={() => toggleDay(i)}
-                                                className={clsx(
-                                                    "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors",
-                                                    selectedDays.includes(i) ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400"
-                                                )}
-                                            >
-                                                {d}
-                                            </button>
-                                        ))}
+                                        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => {
+                                            // map visual index to date-fns getDay index (0=Sun, 1=Mon...)
+                                            // visual: 0=Mon, 1=Tue... 6=Sun
+                                            // date-fns: 0=Sun, 1=Mon...
+                                            // so visual 0 -> 1, visual 6 -> 0
+                                            const dayIndex = i === 6 ? 0 : i + 1;
+
+                                            return (
+                                                <button
+                                                    key={i}
+                                                    onClick={() => toggleDay(dayIndex)}
+                                                    className={clsx(
+                                                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors",
+                                                        selectedDays.includes(dayIndex) ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400"
+                                                    )}
+                                                >
+                                                    {d}
+                                                </button>
+                                            )
+                                        })}
                                     </div>
                                 ) : (
                                     <div>
