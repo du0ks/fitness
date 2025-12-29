@@ -151,12 +151,25 @@ function ManageHabitModal({ isOpen, onClose, workouts, onAdd }) {
     const [type, setType] = useState('weekly');
     const [selectedWorkout, setSelectedWorkout] = useState('');
     const [selectedDays, setSelectedDays] = useState([]);
-    const [interval, setInterval] = useState(2);
+    const [interval, setInterval] = useState(2); // Keep as initial number
+    // Local state for input field that can be string (to allow empty)
+    const [intervalInput, setIntervalInput] = useState('2');
     const [color, setColor] = useState('blue');
 
     const toggleDay = (d) => {
         if (selectedDays.includes(d)) setSelectedDays(prev => prev.filter(x => x !== d));
         else setSelectedDays(prev => [...prev, d]);
+    };
+
+    const handleIntervalChange = (val) => {
+        setIntervalInput(val);
+        // If it parses to a number, update real state. If empty, it's 0 (or just ignore but we need valid number on save)
+        const num = parseInt(val);
+        if (!isNaN(num)) {
+            setInterval(num);
+        } else {
+            setInterval(0);
+        }
     };
 
     const handleSave = () => {
@@ -230,12 +243,7 @@ function ManageHabitModal({ isOpen, onClose, workouts, onAdd }) {
                                 {type === 'weekly' ? (
                                     <div className="flex justify-between">
                                         {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => {
-                                            // map visual index to date-fns getDay index (0=Sun, 1=Mon...)
-                                            // visual: 0=Mon, 1=Tue... 6=Sun
-                                            // date-fns: 0=Sun, 1=Mon...
-                                            // so visual 0 -> 1, visual 6 -> 0
                                             const dayIndex = i === 6 ? 0 : i + 1;
-
                                             return (
                                                 <button
                                                     key={i}
@@ -255,8 +263,8 @@ function ManageHabitModal({ isOpen, onClose, workouts, onAdd }) {
                                         <label className="block text-xs text-zinc-500 mb-1">Repeat Every X Days</label>
                                         <input
                                             type="number"
-                                            value={interval}
-                                            onChange={e => setInterval(Number(e.target.value))}
+                                            value={intervalInput}
+                                            onChange={e => handleIntervalChange(e.target.value)}
                                             className="w-full bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-white"
                                         />
                                     </div>

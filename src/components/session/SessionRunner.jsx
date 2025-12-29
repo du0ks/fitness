@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useWorkouts } from '../../hooks/useWorkouts';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, CheckCircle, SkipForward, Play, Pause, X } from 'lucide-react';
+import { ChevronLeft, CheckCircle, SkipForward, Play, Pause, X, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
-import useSound from 'use-sound'; // Note: might need to install or just skip for now
+// import useSound from 'use-sound'; // Note: might need to install or just skip for now
 
 export default function SessionRunner() {
     const navigate = useNavigate();
@@ -17,41 +17,88 @@ export default function SessionRunner() {
     const [sessionState, setSessionState] = useState('selection'); // selection, active, rest, finished
     const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
     const [currentSet, setCurrentSet] = useState(1);
-    const [timer, setTimer] = useState(0);
-    const [totalTimer, setTotalTimer] = useState(0); // Duration of workout
-    const [isTimerRunning, setIsTimerRunning] = useState(false);
+
+    // Timer State
+    const [timerDisplay, setTimerDisplay] = useState(0);
+    const [totalTimer, setTotalTimer] = useState(0);
     const [restType, setRestType] = useState('set'); // 'set' or 'exercise'
+
+    // Refs for timestamps
+    const restEndTimeRef = useRef(null);
+    const workoutStartTimeRef = useRef(null);
+
+    // Exit Confirmation
+    const [showExitConfirm, setShowExitConfirm] = useState(false);
 
     const workout = workouts.find(w => w.id === selectedWorkoutId);
     const currentExercise = workout?.exercises[currentExerciseIndex];
 
-    // Timer Effect
+    // --- Navigation Blocking ---
+    useEffect(() => {
+        if (sessionState === 'active' || sessionState === 'rest') {
+            // Push a dummy state so back button doesn't leave page immediately
+            window.history.pushState(null, null, window.location.pathname);
+
+            const handlePopState = (e) => {
+                // Prevent default back behavior by pushing state again
+                window.history.pushState(null, null, window.location.pathname);
+                setShowExitConfirm(true);
+            };
+
+            window.addEventListener('popstate', handlePopState);
+            return () => window.removeEventListener('popstate', handlePopState);
+        }
+    }, [sessionState]);
+
+
+    // --- Timer Logic (Timestamp based) ---
     useEffect(() => {
         let interval = null;
-        if (sessionState === 'rest' && timer > 0) {
-            interval = setInterval(() => setTimer(t => t - 1), 1000);
-        } else if (sessionState === 'rest' && timer === 0) {
-            // Rest finished
-            finishRest();
+
+        if (sessionState === 'rest') {
+            interval = setInterval(() => {
+                if (restEndTimeRef.current) {
+                    const now = Date.now();
+                    const remaining = Math.ceil((restEndTimeRef.current - now) / 1000);
+
+                    if (remaining <= 0) {
+                        setTimerDisplay(0);
+                        finishRest();
+                    } else {
+                        setTimerDisplay(remaining);
+                    }
+                }
+            }, 200); // Check more frequently than 1s to be responsive
+        } else {
+            setTimerDisplay(0);
         }
+
         return () => clearInterval(interval);
-    }, [sessionState, timer]);
+    }, [sessionState]);
 
     // Total Duration Timer
     useEffect(() => {
         let interval = null;
         if (sessionState === 'active' || sessionState === 'rest') {
-            interval = setInterval(() => setTotalTimer(t => t + 1), 1000);
+            if (!workoutStartTimeRef.current) workoutStartTimeRef.current = Date.now();
+
+            interval = setInterval(() => {
+                const now = Date.now();
+                setTotalTimer(Math.floor((now - workoutStartTimeRef.current) / 1000));
+            }, 1000);
         }
         return () => clearInterval(interval);
     }, [sessionState]);
+
 
     const startWorkout = (id) => {
         setSelectedWorkoutId(id);
         setSessionState('active');
         setCurrentExerciseIndex(0);
         setCurrentSet(1);
+
         setTotalTimer(0);
+        workoutStartTimeRef.current = Date.now();
     };
 
     const finishSet = () => {
@@ -66,11 +113,18 @@ export default function SessionRunner() {
         }
 
         setRestType(isLastSet ? 'exercise' : 'set');
-        setTimer(isLastSet ? currentExercise.restExercise : currentExercise.restSet);
+        const duration = isLastSet ? currentExercise.restExercise : currentExercise.restSet;
+
+        // Set timestamp for end of rest
+        restEndTimeRef.current = Date.now() + (duration * 1000);
+        setTimerDisplay(duration);
+
         setSessionState('rest');
     };
 
     const finishRest = () => {
+        if (sessionState !== 'rest') return; // Guard against double calls
+
         if (restType === 'set') {
             setCurrentSet(s => s + 1);
         } else {
@@ -78,6 +132,18 @@ export default function SessionRunner() {
             setCurrentSet(1);
         }
         setSessionState('active');
+    };
+
+    const handleManualExit = () => {
+        setShowExitConfirm(true);
+    };
+
+    const confirmExit = () => {
+        navigate('/');
+    };
+
+    const cancelExit = () => {
+        setShowExitConfirm(false);
     };
 
     const formatTime = (sec) => {
@@ -89,7 +155,7 @@ export default function SessionRunner() {
     if (sessionState === 'selection') {
         return (
             <div className="p-4 bg-zinc-950 min-h-screen">
-                <div className="flex items-center mb-6">
+                <div className="flex items-center mb-6 safe-top">
                     <button onClick={() => navigate(-1)} className="p-2 mr-2"><ChevronLeft /></button>
                     <h1 className="text-2xl font-bold">Start Workout</h1>
                 </div>
@@ -136,8 +202,8 @@ export default function SessionRunner() {
             )} />
 
             {/* Header */}
-            <div className="p-4 z-10 flex justify-between items-center bg-zinc-950/50 backdrop-blur-md">
-                <button onClick={() => navigate('/')}><X size={24} className="text-zinc-500" /></button>
+            <div className="p-4 z-10 flex justify-between items-center bg-zinc-950/50 backdrop-blur-md safe-top">
+                <button onClick={handleManualExit}><X size={24} className="text-zinc-500" /></button>
                 <div className="text-sm font-mono text-zinc-400">{formatTime(totalTimer)}</div>
             </div>
 
@@ -149,7 +215,7 @@ export default function SessionRunner() {
                     >
                         <h2 className="text-zinc-400 text-xl uppercase tracking-widest">{restType === 'exercise' ? 'Next Exercise' : 'Rest'}</h2>
                         <div className="text-8xl font-black font-mono tabular-nums text-blue-500">
-                            {formatTime(timer)}
+                            {formatTime(timerDisplay)}
                         </div>
                         {restType === 'exercise' && (
                             <div className="bg-zinc-900 p-4 rounded-xl">
@@ -193,6 +259,36 @@ export default function SessionRunner() {
                     </div>
                 )}
             </div>
+
+            {/* Exit Confirmation Modal */}
+            <AnimatePresence>
+                {showExitConfirm && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+                            onClick={cancelExit}
+                        />
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+                            className="bg-zinc-900 p-6 rounded-2xl w-full max-w-sm z-50 border border-zinc-800 relative"
+                        >
+                            <div className="flex flex-col items-center text-center space-y-4">
+                                <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center">
+                                    <AlertTriangle className="text-red-500" size={32} />
+                                </div>
+                                <h3 className="text-xl font-bold">Exit Workout?</h3>
+                                <p className="text-zinc-400 text-sm">You will lose your current session progress.</p>
+
+                                <div className="flex gap-3 w-full mt-4">
+                                    <button onClick={cancelExit} className="flex-1 py-3 font-bold bg-zinc-800 rounded-xl hover:bg-zinc-700">Cancel</button>
+                                    <button onClick={confirmExit} className="flex-1 py-3 font-bold bg-red-600 rounded-xl hover:bg-red-700 text-white">Exit</button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
