@@ -37,11 +37,12 @@ export default function SessionRunner() {
     useEffect(() => {
         if (sessionState === 'active' || sessionState === 'rest') {
             // Push a dummy state so back button doesn't leave page immediately
-            window.history.pushState(null, null, window.location.pathname);
+            // Use href because we are using HashRouter, and pathname would be just "/"
+            window.history.pushState(null, null, window.location.href);
 
             const handlePopState = (e) => {
                 // Prevent default back behavior by pushing state again
-                window.history.pushState(null, null, window.location.pathname);
+                window.history.pushState(null, null, window.location.href);
                 setShowExitConfirm(true);
             };
 
