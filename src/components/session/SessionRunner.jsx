@@ -300,7 +300,7 @@ export default function SessionRunner() {
                         </div>
 
                         <div className="py-6">
-                            <div className="text-6xl font-black mb-2">{currentSet} <span className="text-2xl text-zinc-500 font-medium">/ {currentExercise.sets}</span></div>
+                            <div className="text-6xl font-black mb-2 text-white">{currentSet} <span className="text-2xl text-zinc-500 font-medium">/ {currentExercise.sets}</span></div>
                             <p className="text-zinc-400">Current Set</p>
                         </div>
 
