@@ -7,7 +7,7 @@ const LOGS_KEY = 'fit_track_nutrition_logs';
 export function useNutrition() {
     const [config, setConfig] = useLocalStorage(CONFIG_KEY, {
         targetCalories: 2500,
-        targetProtein: 150, // grams
+        targetProtein: 150, // gramss
     });
 
     const [logs, setLogs] = useLocalStorage(LOGS_KEY, {});
